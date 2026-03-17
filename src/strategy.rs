@@ -231,11 +231,13 @@ impl PreLimitStrategy {
                             }
                         }
                         s.merged = true;
-                        // Register for redemption (production only): holding winner, check_market_closure will redeem when market resolves
-                        if !self.config.strategy.simulation_mode {
-                            let trade = Self::cycle_trade_holding_winner(&s, winner, self.config.strategy.shares);
-                            let mut t = self.trades.lock().await;
-                            t.insert(s.condition_id.clone(), trade);
+                        // Register for redemption / PnL accounting (both sim and prod): check_market_closure redeems (prod) and credits profit (sim + prod)
+                        let trade = Self::cycle_trade_holding_winner(&s, winner, self.config.strategy.shares);
+                        let mut t = self.trades.lock().await;
+                        t.insert(s.condition_id.clone(), trade);
+                        if self.config.strategy.simulation_mode {
+                            log::info!("   🎮 SIMULATION: Registered position for PnL when market resolves (condition {})", &s.condition_id[..s.condition_id.len().min(20)]);
+                        } else {
                             log::info!("   Registered position for redemption when market resolves (condition {})", &s.condition_id[..s.condition_id.len().min(20)]);
                         }
                     } else {
@@ -431,12 +433,16 @@ impl PreLimitStrategy {
 
             let current_time_et = Self::get_current_time_et();
             if current_time_et > s.expiry {
-                // Register for redemption (production only) if we held both until expiry (sold opposite already registered)
-                if !self.config.strategy.simulation_mode && s.up_matched && s.down_matched && !s.risk_sold && !s.merged {
+                // Register for redemption / PnL accounting (both sim and prod) if we held both until expiry
+                if s.up_matched && s.down_matched && !s.risk_sold && !s.merged {
                     let trade = Self::cycle_trade_holding_both(&s, self.config.strategy.shares);
                     let mut t = self.trades.lock().await;
                     t.insert(s.condition_id.clone(), trade);
-                    log::info!("   Registered position for redemption when market resolves (condition {})", &s.condition_id[..s.condition_id.len().min(20)]);
+                    if self.config.strategy.simulation_mode {
+                        log::info!("   🎮 SIMULATION: Registered both sides for PnL when market resolves (condition {})", &s.condition_id[..s.condition_id.len().min(20)]);
+                    } else {
+                        log::info!("   Registered position for redemption when market resolves (condition {})", &s.condition_id[..s.condition_id.len().min(20)]);
+                    }
                 }
                 log::info!("Market expired for {}. Clearing state.", asset);
                 states.remove(asset);
@@ -606,9 +612,11 @@ impl PreLimitStrategy {
             let pnl = payout - total_cost;
 
             let winner = if up_wins { "Up" } else if down_wins { "Down" } else { "Unknown" };
-            eprintln!("=== Market resolved ===");
+            let sim_prefix = if self.config.strategy.simulation_mode { "🎮 SIMULATION: " } else { "" };
+            eprintln!("=== Market resolved {}===", sim_prefix);
             eprintln!(
-                "Market closed | condition {} | Winner: {} | Up {:.2} @ {:.4} | Down {:.2} @ {:.4} | Cost ${:.2} | Payout ${:.2} | Actual PnL ${:.2}",
+                "{}Market closed | condition {} | Winner: {} | Up {:.2} @ {:.4} | Down {:.2} @ {:.4} | Cost ${:.2} | Payout ${:.2} | Actual PnL ${:.2}",
+                sim_prefix,
                 &trade.condition_id[..16],
                 winner,
                 trade.up_shares,
@@ -646,7 +654,8 @@ impl PreLimitStrategy {
             }
             let total_actual_pnl = *self.total_profit.lock().await;
             eprintln!(
-                "  -> Actual PnL this market: ${:.2} | Total actual PnL (all time): ${:.2}",
+                "  -> {}Actual PnL this market: ${:.2} | Total PnL (all time): ${:.2}",
+                sim_prefix,
                 pnl,
                 total_actual_pnl
             );
