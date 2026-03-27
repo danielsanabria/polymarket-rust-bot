@@ -244,8 +244,8 @@ impl RiskManager {
 
         use std::fs::OpenOptions;
         use std::io::Write;
-        let file_exists = std::path::Path::new("trades.csv").exists();
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("trades.csv") {
+        let file_exists = std::path::Path::new("trades_shadow_v5.csv").exists();
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("trades_shadow_v5.csv") {
             if !file_exists {
                 let _ = writeln!(file, "timestamp,asset,action,shares,price,pnl");
             }
