@@ -29,3 +29,11 @@ chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = "0.9"
 toml = "0.8"
 walkdir = "2.5"
+
+[[bin]]
+name = "polymarket-arbitrage-bot"
+path = "src/main.rs"
+
+[[bin]]
+name = "bot-old"
+path = "src/bin/bot_old.rs"

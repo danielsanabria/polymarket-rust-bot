@@ -9,17 +9,20 @@
 
 ## Table of Contents
 
-- [What Is This Bot?](#what-is-this-bot)
-- [How Does the Bot Work?](#how-does-the-bot-work)
-- [Supported Markets](#supported-markets)
-- [Features](#features)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Strategy Logic in Detail](#strategy-logic-in-detail)
-- [Risk Disclaimer](#risk-disclaimer)
-- [Contact & Support](#contact--support)
+- [ ] [What Is This Bot?](#what-is-this-bot)
+- [ ] [How Does the Bot Work?](#how-does-the-bot-work)
+- [ ] [Supported Markets](#supported-markets)
+- [ ] [Features](#features)
+- [ ] [Advanced Signals & Correlation](#advanced-signals--correlation)
+- [ ] [Position Sizing & Risk Management](#position-sizing--risk-management)
+- [ ] [Auditing & PnL Tracking](#auditing--pnl-tracking)
+- [ ] [Requirements](#requirements)
+- [ ] [Installation](#installation)
+- [ ] [Configuration](#configuration)
+- [ ] [Usage](#usage)
+- [ ] [Strategy Logic in Detail](#strategy-logic-in-detail)
+- [ ] [Risk Disclaimer](#risk-disclaimer)
+- [ ] [Contact & Support](#contact--support)
 
 ---
 
@@ -112,15 +115,50 @@ The bot runs the same logic **in parallel** for all four assets. Each asset has 
 
 - **Multi-asset 15m support:** BTC, ETH, SOL, XRP in one process.
 - **Pre-order strategy:** Limit buys on both Up and Down before/at period start.
-- **Signal-based placement:** Good/Bad/Unknown signal to decide whether to place pre-orders for the next period.
+- **High-Speed Oracle:** Integration with Binance Websockets for real-time price monitoring of multiple assets.
+- **Advanced Signal Logic:** Good/Bad/Unknown signal using front-running and correlation (BTC dominance/movements).
+- **Fractional Kelly Criterion:** Dynamic sizing based on equity and edge to optimize long-term bankroll growth.
+- **Deterministic State Machine:** Robust cycle management focused on 15-minute intervals.
 - **Sell-opposite logic:** When both filled, sell the losing side if the winner’s price is high and time is short.
 - **One-side risk management:** Price-based or time-based early exit when only one side fills.
-- **Mid-market orders:** Optional limit orders on the **current** period market.
+- **Real-time PnL & CSV Auditing:** Systematic logging of all trades to `trades.csv` for post-resolution analysis.
 - **Simulation mode:** Run without placing real orders; match logic based on price vs limit.
 - **Automatic redemption:** Redeem winning positions when markets resolve.
 - **Redeem CLI:** Manual redeem by condition ID or fetch all redeemable positions for your proxy wallet.
 
 ---
+
+## Advanced Signals & Correlation
+
+The bot utilizes a dedicated **Binance Oracle** that tracks real-time price action via high-speed websockets. This feed is used for:
+
+- **BTC Correlation**: Monitoring Bitcoin movements to predict or front-run moves in ETH, SOL, and XRP markets.
+- **Front-running Signals**: Evaluating when a market might "clear" or move significantly before the period ends, allowing the bot to skip risky entry windows.
+- **Market Dominance**: Assessing current market stability across multiple assets to determine signal quality (Good/Bad).
+
+---
+
+## Position Sizing & Risk Management
+
+Rather than fixed trade sizes, the bot implements a **Fractional Kelly Criterion** approach:
+
+1.  **Bankroll-aware**: Sizes are calculated based on your `bankroll_usdc`.
+2.  **Fractional Kelly (k)**: A multiplier (default 0.25) to manage volatility and risk of ruin.
+3.  **Risk Aversion (Gamma)**: Controls the sensitivity of the sizing algorithm to perceived edge.
+4.  **Max Exposure**: Protects against placing too many orders at once across different assets.
+
+---
+
+## Auditing & PnL Tracking
+
+Every activity is recorded for full transparency:
+
+- **`trades.csv`**: Contains a structured record of every trade, including market ID, token (Up/Down), side, price, filled amount, and PnL.
+- **Post-Resolution Logging**: The bot automatically recovers resolution data (final payout) to calculate real-world profit/loss.
+- **Terminal Summary**: Real-time updates on current period and total session PnL are displayed in the console.
+
+---
+
 
 ## Requirements
 
@@ -177,6 +215,9 @@ cp config.json.example config.json
     "sell_opposite_above": 0.84,
     "sell_opposite_time_remaining": 15,
     "market_closure_check_interval_seconds": 60,
+    "risk_aversion_gamma": 0.001,
+    "kelly_fraction_k": 0.25,
+    "bankroll_usdc": 500.0,
     "signal": {
       "enabled": true,
       "stable_min": 0.35,
@@ -208,7 +249,10 @@ cp config.json.example config.json
 | Field                             | Description |
 |-----------------------------------|-------------|
 | `price_limit`                     | Limit price for pre-orders (e.g. 0.45 = 45¢). |
-| `shares`                          | Size per order (same for Up and Down). |
+| `shares`                          | Baseline size per order (overridden if Kelly is active). |
+| `bankroll_usdc`                   | Total capital base for Kelly Criterion calculations. |
+| `kelly_fraction_k`               | Multiplier for Kelly sizing (0.25 = 1/4 Kelly). |
+| `risk_aversion_gamma`            | Tuning parameter for risk-adjusted edge evaluation. |
 | `place_order_before_mins`         | Place pre-orders when this many minutes before the **next** 15m period. |
 | `check_interval_ms`               | Main loop interval (ms). |
 | `simulation_mode`                 | If `true`, no real orders; fills inferred from price vs limit. |

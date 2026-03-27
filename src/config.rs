@@ -38,6 +38,12 @@ pub struct StrategyConfig {
     pub sell_opposite_time_remaining: u64,
     #[serde(default = "default_market_closure_check_interval_seconds")]
     pub market_closure_check_interval_seconds: u64,
+    #[serde(default = "default_risk_aversion_gamma")]
+    pub risk_aversion_gamma: f64,
+    #[serde(default = "default_kelly_fraction_k")]
+    pub kelly_fraction_k: f64,
+    #[serde(default = "default_bankroll_usdc")]
+    pub bankroll_usdc: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -73,6 +79,9 @@ fn default_one_side_buy_risk_management() -> String { "price".to_string() }
 fn default_sell_opposite_above() -> f64 { 0.95 }
 fn default_sell_opposite_time_remaining() -> u64 { 15 }
 fn default_market_closure_check_interval_seconds() -> u64 { 120 }
+fn default_risk_aversion_gamma() -> f64 { 0.001 }
+fn default_kelly_fraction_k() -> f64 { 0.25 }
+fn default_bankroll_usdc() -> f64 { 500.0 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolymarketConfig {
@@ -109,6 +118,9 @@ impl Default for Config {
                 sell_opposite_above: 0.95,
                 sell_opposite_time_remaining: 15,
                 market_closure_check_interval_seconds: 120,
+                risk_aversion_gamma: 0.001,
+                kelly_fraction_k: 0.25,
+                bankroll_usdc: 500.0,
             },
         }
     }

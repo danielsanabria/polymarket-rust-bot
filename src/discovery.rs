@@ -79,24 +79,8 @@ impl MarketDiscovery {
 
     /// Current 15-minute period start (ET), rounded down to :00, :15, :30, :45.
     pub fn current_15m_period_start_et() -> i64 {
-        let now_utc = chrono::Utc::now();
-        let now_et = now_utc.with_timezone(&New_York);
-        let minute = now_et.minute();
-        let minute_floor = (minute / 15) * 15;
-
-        let period_start_et = New_York
-            .with_ymd_and_hms(
-                now_et.year(),
-                now_et.month(),
-                now_et.day(),
-                now_et.hour(),
-                minute_floor,
-                0,
-            )
-            .single()
-            .unwrap();
-
-        period_start_et.timestamp()
+        let now = chrono::Utc::now().timestamp();
+        (now / 900) * 900
     }
 
     pub async fn get_market_tokens(&self, condition_id: &str) -> Result<(String, String)> {

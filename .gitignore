@@ -5,3 +5,10 @@ config.json
 *.log
 history.toml
 .env
+.csv
+.exe
+# Search caches and debug logs
+bitcoin_markets.json
+gamma_search.json
+build_errors.txt
+errors.txt

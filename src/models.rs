@@ -73,26 +73,7 @@ pub struct RedeemResponse {
     pub amount_redeemed: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-pub struct PreLimitOrderState {
-    pub asset: String,
-    pub condition_id: String,
-    pub up_token_id: String,
-    pub down_token_id: String,
-    pub up_order_id: Option<String>,
-    pub down_order_id: Option<String>,
-    pub up_order_price: f64,
-    pub down_order_price: f64,
-    pub up_matched: bool,
-    pub down_matched: bool,
-    pub merged: bool,
-    pub expiry: i64,
-    pub risk_sold: bool,
-    pub order_placed_at: i64,
-    pub market_period_start: i64,
-    /// Timestamp when we first had only one side matched (for sell_after_danger_time_passed)
-    pub one_side_matched_at: Option<i64>,
-}
+// PreLimitOrderState has been moved to src/strategy/state.rs
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenPrice {

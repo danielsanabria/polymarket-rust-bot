@@ -4,9 +4,12 @@ mod models;
 mod discovery;
 mod signals;
 mod strategy;
-
+mod oracle;
+mod hedger;
 
 use anyhow::Result;
+use oracle::BinanceOracle;
+use hedger::HyperliquidHedger;
 use clap::Parser;
 use config::{Args, Config};
 use std::io::Write;
@@ -33,22 +36,23 @@ async fn main() -> Result<()> {
     const N_ASSETS: u32 = 4;
     let four_assets = (N_ASSETS as f64) * cost_per_side;
 
-    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    eprintln!("📋 Confirming configuration");
+    eprintln!("------------------------------------------------------------");
+    eprintln!("Confirming configuration");
     eprintln!("   shares per side        {:.0}", shares);
     eprintln!("   ave price per share   ${:.2}", price);
+    eprintln!("   bankroll usdc         ${:.0}", config.strategy.bankroll_usdc);
     eprintln!("   payout per trade      ${:.0} × 2 = ${:.0}", cost_per_side, payout_per_trade);
     eprintln!("   {} assets              ${:.0}", N_ASSETS, four_assets);
-    eprintln!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    eprintln!("------------------------------------------------------------");
 
-    eprintln!("🚀 Starting Polymarket Pre-Limit Order Bot");
+    eprintln!("Starting Polymarket Pre-Limit Order Bot");
     if config.strategy.simulation_mode {
-        eprintln!("🎮 SIMULATION MODE ENABLED - No real orders will be placed");
+        eprintln!("SIMULATION MODE ENABLED - No real orders will be placed");
         eprintln!("   Orders will match when prices hit ${:.2} or below", config.strategy.price_limit);
     }
-    eprintln!("📈 Strategy: Placing Up/Down limit orders at ${:.2} for 15m markets (BTC, ETH, SOL, XRP)", config.strategy.price_limit);
+    eprintln!("Strategy: Placing Up/Down limit orders at ${:.2} for 15m markets (BTC, ETH, SOL, XRP)", config.strategy.price_limit);
     if config.strategy.signal.enabled {
-        eprintln!("   📡 Signal-based risk management: enabled (place on good signal, skip on bad, sell early on danger)");
+        eprintln!("   Signal-based risk management: enabled");
     }
 
     let api = Arc::new(PolymarketApi::new(
@@ -67,18 +71,39 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    if config.polymarket.private_key.is_some() {
-        if let Err(e) = api.authenticate().await {
-            log::error!("Authentication failed: {}", e);
-            anyhow::bail!("Authentication failed. Please check your credentials.");
+    if !config.strategy.simulation_mode {
+        if config.polymarket.private_key.is_some() {
+            if let Err(e) = api.authenticate().await {
+                log::error!("Authentication failed: {}", e);
+                anyhow::bail!("Authentication failed. Please check your credentials.");
+            }
+        } else {
+            log::warn!("⚠️ No private key provided. Bot will only be able to monitor markets.");
         }
     } else {
-        log::warn!("⚠️ No private key provided. Bot will only be able to monitor markets.");
+        log::info!("🎮 Simulation mode: skipping authentication.");
     }
 
 
     let market_closure_interval = config.strategy.market_closure_check_interval_seconds;
-    let strategy = Arc::new(PreLimitStrategy::new(api, config));
+    
+    // Initialize High-Speed Binance Oracle
+    let assets = vec!["BTC".to_string(), "ETH".to_string(), "SOL".to_string(), "XRP".to_string()];
+    let oracle = Arc::new(BinanceOracle::new(assets));
+    let oracle_for_ws = Arc::clone(&oracle);
+    
+    tokio::spawn(async move {
+        oracle_for_ws.run().await;
+    });
+
+    // Initialize Hedger
+    let hedger = Arc::new(HyperliquidHedger::new(
+        config.strategy.signal.enabled, // Toggle based on signal enabled for now
+        "".to_string(), // TODO: Load from config
+        "".to_string(),
+    ));
+
+    let strategy = Arc::new(PreLimitStrategy::new(api, config, oracle, hedger));
     let strategy_for_closure = Arc::clone(&strategy);
 
     tokio::spawn(async move {
