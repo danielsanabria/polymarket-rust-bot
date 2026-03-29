@@ -1,0 +1,511 @@
+﻿cargo :     Checking polymarket-arbitrage-bot v0.1.0 (C:\Use
+rs\danie\Documents\rust-bot\polymarket-arbitrage-bot-pre-ord
+er-15m-markets)
+En línea: 1 Carácter: 1
++ cargo check 2>&1 | Out-File -Encoding utf8 
+check_results.txt
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking p 
+   o...er-15m-markets):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: unused import: `crate::config::Config`
+ --> src\bin\market_test.rs:2:5
+  |
+2 | use crate::config::Config;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of 
+`#[warn(unused)]`) on by default
+
+warning: unused import: `std::sync::Arc`
+ --> src\bin\market_test.rs:4:5
+  |
+4 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `warn`
+ --> src\bin\..\api.rs:9:11
+  |
+9 | use log::{warn, error};
+  |           ^^^^
+
+warning: unused import: `rust_decimal::prelude::*`
+   --> src\bin\..\api.rs:458:13
+    |
+458 |         use rust_decimal::prelude::*;
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `warn`
+ --> src\bin\..\api.rs:9:11
+  |
+9 | use log::{warn, error};
+  |           ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of 
+`#[warn(unused)]`) on by default
+
+warning: unused import: `warn`
+ --> src\api.rs:9:11
+  |
+9 | use log::{warn, error};
+  |           ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of 
+`#[warn(unused)]`) on by default
+
+warning: unused import: `rust_decimal::prelude::*`
+   --> src\api.rs:458:13
+    |
+458 |         use rust_decimal::prelude::*;
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `debug`, `error`, and `info`
+  --> src\bin\..\strategy_old.rs:13:17
+   |
+13 | use log::{warn, info, error, debug};
+   |                 ^^^^  ^^^^^  ^^^^^
+
+warning: use of deprecated function `base64::decode`: Use 
+Engine::decode
+   --> src\bin\..\api.rs:170:42
+    |
+170 |         let secret_bytes = match 
+base64::decode(secret) {
+    |                                          ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: unused import: `crate::models::*`
+ --> src\strategy\risk.rs:3:5
+  |
+3 | use crate::models::*;
+  |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `error`
+  --> src\strategy\risk.rs:12:30
+   |
+12 | use log::{info, debug, warn, error};
+   |                              ^^^^^
+
+warning: unused import: `crate::strategy::risk::RiskManager`
+  --> src\strategy\mod.rs:10:5
+   |
+10 | use crate::strategy::risk::RiskManager;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `warn`
+  --> src\strategy\mod.rs:20:17
+   |
+20 | use log::{info, warn, error};
+   |                 ^^^^
+
+warning: unused import: `debug`
+ --> src\oracle\binance.rs:7:24
+  |
+7 | use log::{info, error, debug};
+  |                        ^^^^^
+
+warning: unused imports: `debug` and `error`
+ --> src\hedger\hyperliquid.rs:2:17
+  |
+2 | use log::{info, error, debug};
+  |                 ^^^^^  ^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> src\hedger\hyperliquid.rs:3:5
+  |
+3 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `tokio::sync::Mutex`
+ --> src\hedger\hyperliquid.rs:4:5
+  |
+4 | use tokio::sync::Mutex;
+  |     ^^^^^^^^^^^^^^^^^^
+
+warning: use of deprecated function `base64::decode`: Use 
+Engine::decode
+   --> src\api.rs:170:42
+    |
+170 |         let secret_bytes = match 
+base64::decode(secret) {
+    |                                          ^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+error[E0107]: missing generics for struct `Authenticated`
+  --> src\bin\..\api.rs:99:59
+   |
+99 |     async fn get_clob_client(&self) -> 
+Result<(ClobClient<Authenticated>, 
+LocalSigner<alloy::signers::k256::ecdsa::SigningKey>)> {
+   |                                                        
+   ^^^^^^^^^^^^^ expected 1 generic argument
+   |
+note: struct defined here, with 1 generic parameter: `K`
+  --> C:\Users\danie\.cargo\registry\src\index.crates.io-194
+9cf8c6b5b557f\polymarket-client-sdk-0.4.4\src\auth.rs:89:16
+   |
+89 |     pub struct Authenticated<K: Kind> {
+   |                ^^^^^^^^^^^^^ -
+help: add missing generic argument
+   |
+99 |     async fn get_clob_client(&self) -> 
+Result<(ClobClient<Authenticated<K>>, 
+LocalSigner<alloy::signers::k256::ecdsa::SigningKey>)> {
+   |                                                        
+                +++
+
+error[E0107]: missing generics for struct `Authenticated`
+  --> src\api.rs:99:59
+   |
+99 |     async fn get_clob_client(&self) -> 
+Result<(ClobClient<Authenticated>, 
+LocalSigner<alloy::signers::k256::ecdsa::SigningKey>)> {
+   |                                                        
+   ^^^^^^^^^^^^^ expected 1 generic argument
+   |
+note: struct defined here, with 1 generic parameter: `K`
+  --> C:\Users\danie\.cargo\registry\src\index.crates.io-194
+9cf8c6b5b557f\polymarket-client-sdk-0.4.4\src\auth.rs:89:16
+   |
+89 |     pub struct Authenticated<K: Kind> {
+   |                ^^^^^^^^^^^^^ -
+help: add missing generic argument
+   |
+99 |     async fn get_clob_client(&self) -> 
+Result<(ClobClient<Authenticated<K>>, 
+LocalSigner<alloy::signers::k256::ecdsa::SigningKey>)> {
+   |                                                        
+                +++
+
+error[E0282]: type annotations needed for `(_, _)`
+   --> src\bin\..\api.rs:351:13
+    |
+351 |         let (client, signer) = 
+self.get_clob_client().await?;
+    |             ^^^^^^^^^^^^^^^^
+...
+370 |         let order_builder = client
+    |                             ------ type must be known 
+at this point
+    |
+help: consider giving this pattern a type, where the 
+placeholders `_` are specified
+    |
+351 |         let (client, signer): (_, _) = 
+self.get_clob_client().await?;
+    |                             ++++++++
+
+error[E0282]: type annotations needed
+   --> src\bin\..\api.rs:377:28
+    |
+377 |           let signed_order = client.sign(&signer, 
+order_builder.build().await?)
+    |  ____________________________^
+378 | |             .await
+    | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed for `(_, _)`
+   --> src\bin\..\api.rs:443:13
+    |
+443 |         let (client, signer) = 
+self.get_clob_client().await?;
+    |             ^^^^^^^^^^^^^^^^
+...
+498 |         let order_builder = client
+    |                             ------ type must be known 
+at this point
+    |
+help: consider giving this pattern a type, where the 
+placeholders `_` are specified
+    |
+443 |         let (client, signer): (_, _) = 
+self.get_clob_client().await?;
+    |                             ++++++++
+
+error[E0282]: type annotations needed
+   --> src\bin\..\api.rs:505:28
+    |
+505 |           let signed_order = client.sign(&signer, 
+order_builder.build().await?)
+    |  ____________________________^
+506 | |             .await
+    | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed for `(_, _)`
+   --> src\bin\..\api.rs:580:13
+    |
+580 |         let (client, _) = 
+self.get_clob_client().await?;
+    |             ^^^^^^^^^^^
+581 |         
+582 |         client.cancel_order(order_id).await
+    |         ------ type must be known at this point
+    |
+help: consider giving this pattern a type, where the 
+placeholders `_` are specified
+    |
+580 |         let (client, _): (_, _) = 
+self.get_clob_client().await?;
+    |                        ++++++++
+
+error[E0282]: type annotations needed
+   --> src\bin\..\api.rs:582:9
+    |
+582 |         client.cancel_order(order_id).await
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot 
+infer type
+
+error[E0282]: type annotations needed for `(_, _)`
+   --> src\bin\..\api.rs:591:13
+    |
+591 |         let (client, _) = 
+self.get_clob_client().await?;
+    |             ^^^^^^^^^^^
+592 |
+593 |         let up_filled = 
+client.order(up_order_id).await
+    |                         ------ type must be known at 
+this point
+    |
+help: consider giving this pattern a type, where the 
+placeholders `_` are specified
+    |
+591 |         let (client, _): (_, _) = 
+self.get_clob_client().await?;
+    |                        ++++++++
+
+error[E0282]: type annotations needed
+   --> src\bin\..\api.rs:593:25
+    |
+593 |         let up_filled = 
+client.order(up_order_id).await
+    |                         
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> src\bin\..\api.rs:598:27
+    |
+598 |         let down_filled = 
+client.order(down_order_id).await
+    |                           
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+
+error[E0282]: type annotations needed for `(_, _)`
+   --> src\api.rs:351:13
+    |
+351 |         let (client, signer) = 
+self.get_clob_client().await?;
+    |             ^^^^^^^^^^^^^^^^
+...
+370 |         let order_builder = client
+    |                             ------ type must be known 
+at this point
+    |
+help: consider giving this pattern a type, where the 
+placeholders `_` are specified
+    |
+351 |         let (client, signer): (_, _) = 
+self.get_clob_client().await?;
+    |                             ++++++++
+
+error[E0282]: type annotations needed
+   --> src\api.rs:377:28
+    |
+377 |           let signed_order = client.sign(&signer, 
+order_builder.build().await?)
+    |  ____________________________^
+378 | |             .await
+    | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed for `(_, _)`
+   --> src\api.rs:443:13
+    |
+443 |         let (client, signer) = 
+self.get_clob_client().await?;
+    |             ^^^^^^^^^^^^^^^^
+...
+498 |         let order_builder = client
+    |                             ------ type must be known 
+at this point
+    |
+help: consider giving this pattern a type, where the 
+placeholders `_` are specified
+    |
+443 |         let (client, signer): (_, _) = 
+self.get_clob_client().await?;
+    |                             ++++++++
+
+error[E0282]: type annotations needed
+   --> src\api.rs:505:28
+    |
+505 |           let signed_order = client.sign(&signer, 
+order_builder.build().await?)
+    |  ____________________________^
+506 | |             .await
+    | |__________________^ cannot infer type
+
+error[E0282]: type annotations needed for `(_, _)`
+   --> src\api.rs:580:13
+    |
+580 |         let (client, _) = 
+self.get_clob_client().await?;
+    |             ^^^^^^^^^^^
+581 |         
+582 |         client.cancel_order(order_id).await
+    |         ------ type must be known at this point
+    |
+help: consider giving this pattern a type, where the 
+placeholders `_` are specified
+    |
+580 |         let (client, _): (_, _) = 
+self.get_clob_client().await?;
+    |                        ++++++++
+
+error[E0282]: type annotations needed
+   --> src\api.rs:582:9
+    |
+582 |         client.cancel_order(order_id).await
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot 
+infer type
+
+error[E0282]: type annotations needed for `(_, _)`
+   --> src\api.rs:591:13
+    |
+591 |         let (client, _) = 
+self.get_clob_client().await?;
+    |             ^^^^^^^^^^^
+592 |
+593 |         let up_filled = 
+client.order(up_order_id).await
+    |                         ------ type must be known at 
+this point
+    |
+help: consider giving this pattern a type, where the 
+placeholders `_` are specified
+    |
+591 |         let (client, _): (_, _) = 
+self.get_clob_client().await?;
+    |                        ++++++++
+
+error[E0282]: type annotations needed
+   --> src\api.rs:593:25
+    |
+593 |         let up_filled = 
+client.order(up_order_id).await
+    |                         
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+
+error[E0282]: type annotations needed
+   --> src\api.rs:598:27
+    |
+598 |         let down_filled = 
+client.order(down_order_id).await
+    |                           
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot infer type
+
+warning: unused variable: `token_id`
+   --> src\bin\..\api.rs:694:9
+    |
+694 |         token_id: &str,
+    |         ^^^^^^^^ help: if this is intentional, prefix 
+it with an underscore: `_token_id`
+    |
+    = note: `#[warn(unused_variables)]` (part of 
+`#[warn(unused)]`) on by default
+
+Some errors have detailed explanations: E0107, E0282.
+For more information about an error, try `rustc --explain 
+E0107`.
+warning: `polymarket-arbitrage-bot` (bin "market_test") 
+generated 6 warnings
+error: could not compile `polymarket-arbitrage-bot` (bin 
+"market_test") due to 10 previous errors; 6 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+error[E0308]: mismatched types
+  --> src\strategy\mod.rs:91:17
+   |
+90 |             self.processor.process_asset(
+   |                            ------------- arguments to 
+this method are incorrect
+91 |                 asset, 
+   |                 ^^^^^ expected `&str`, found `String`
+   |
+note: method defined here
+  --> src\strategy\processor.rs:31:18
+   |
+31 |     pub async fn process_asset(
+   |                  ^^^^^^^^^^^^^
+32 |         &self, 
+33 |         asset: &str, 
+   |         -----------
+help: consider borrowing here
+   |
+91 |                 &asset, 
+   |                 +
+
+error[E0308]: mismatched types
+   --> src\strategy\mod.rs:166:49
+    |
+166 |             if let Some(state) = 
+states.get_mut(*asset) {
+    |                                         ------- 
+^^^^^^ expected `&_`, found `String`
+    |                                         |
+    |                                         arguments to 
+this method are incorrect
+    |
+    = note: expected reference `&_`
+                  found struct `std::string::String`
+note: method defined here
+   --> /rustc/4a4ef493e3a1488c6e321570238084b38948f6db/libra
+ry\std\src\collections\hash\map.rs:1259:11
+help: consider removing deref here
+    |
+166 -             if let Some(state) = 
+states.get_mut(*asset) {
+166 +             if let Some(state) = 
+states.get_mut(asset) {
+    |
+
+warning: unused variable: `token_id`
+   --> src\api.rs:694:9
+    |
+694 |         token_id: &str,
+    |         ^^^^^^^^ help: if this is intentional, prefix 
+it with an underscore: `_token_id`
+    |
+    = note: `#[warn(unused_variables)]` (part of 
+`#[warn(unused)]`) on by default
+
+warning: unused variable: `only_one_matched`
+   --> src\strategy\risk.rs:121:13
+    |
+121 |         let only_one_matched = (state.up_matched && 
+!state.down_matched) || (state.down_matched && 
+!state.up_matched);
+    |             ^^^^^^^^^^^^^^^^ help: if this is 
+intentional, prefix it with an underscore: 
+`_only_one_matched`
+
+warning: unused variable: `size`
+  --> src\hedger\hyperliquid.rs:34:56
+   |
+34 |     pub async fn close_hedge_order(&self, asset: &str, 
+size: f64, side: &str) -> Result<()> {
+   |                                                        
+^^^^ help: if this is intentional, prefix it with an 
+underscore: `_size`
+
+warning: `polymarket-arbitrage-bot` (bin "bot-old") 
+generated 5 warnings (3 duplicates)
+error: could not compile `polymarket-arbitrage-bot` (bin 
+"bot-old") due to 10 previous errors; 5 warnings emitted
+Some errors have detailed explanations: E0107, E0282, E0308.
+warning: `polymarket-arbitrage-bot` (bin 
+"polymarket-arbitrage-bot") generated 14 warnings
+error: could not compile `polymarket-arbitrage-bot` (bin 
+"polymarket-arbitrage-bot") due to 12 previous errors; 14 
+warnings emitted

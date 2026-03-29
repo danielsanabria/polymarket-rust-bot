@@ -84,11 +84,11 @@ impl PreLimitStrategy {
     }
 
     async fn process_markets(&self) -> Result<()> {
-        let assets = vec!["BTC", "ETH", "SOL", "XRP"];
+        let assets = self.config.strategy.assets.clone();
         let current_period_et = get_current_15m_period_et();
         for asset in assets {
             self.processor.process_asset(
-                asset, 
+                &asset, 
                 current_period_et, 
                 self.states.clone(), 
                 self.trades.clone(), 
@@ -135,7 +135,8 @@ impl PreLimitStrategy {
 
             if !self.config.strategy.simulation_mode && (up_wins || down_wins) {
                 let token_id = if up_wins { trade.up_token_id.as_deref().unwrap_or("") } else { trade.down_token_id.as_deref().unwrap_or("") };
-                let _ = self.api.redeem_tokens(&trade.condition_id, token_id, "").await;
+                let winner_side = if up_wins { "Up" } else { "Down" };
+                let _ = self.api.redeem_tokens(&trade.condition_id, token_id, winner_side).await;
             }
 
             *self.total_profit.lock().await += pnl;
@@ -148,7 +149,7 @@ impl PreLimitStrategy {
     }
 
     async fn display_market_status(&self) -> Result<()> {
-        let assets = vec!["BTC", "ETH", "SOL", "XRP"];
+        let assets = self.config.strategy.assets.clone();
         let current_time_et = get_current_time_et();
         
         let total_profit = {
@@ -162,7 +163,7 @@ impl PreLimitStrategy {
         let mut states_to_check: Vec<String> = Vec::new();
         
         for asset in &assets {
-            if let Some(state) = states.get_mut(*asset) {
+            if let Some(state) = states.get_mut(asset) {
                 let market_period = state.market_period_start;
                 
                 match self.processor.discover_next_market(asset, market_period).await {

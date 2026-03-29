@@ -6,11 +6,14 @@ use std::str::FromStr;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use hex;
-use log::{warn, error};
+use log::error;
 use std::sync::Arc;
+use base64;
 
 // Official SDK imports for proper order signing
 use polymarket_client_sdk::clob::{Client as ClobClient, Config as ClobConfig};
+use polymarket_client_sdk::auth::state::Authenticated;
+use polymarket_client_sdk::auth::Normal;
 use polymarket_client_sdk::clob::types::{Side, OrderType, OrderStatusType, SignatureType};
 use polymarket_client_sdk::POLYGON;
 use alloy::signers::local::LocalSigner;
@@ -93,12 +96,13 @@ impl PolymarketApi {
         }
     }
     
-    // Authenticate with Polymarket CLOB API
-    pub async fn authenticate(&self) -> Result<()> {
+    /// Helper to get an authenticated CLOB client and signer
+    async fn get_clob_client(&self) -> Result<(ClobClient<Authenticated<Normal>>, LocalSigner<alloy::signers::k256::ecdsa::SigningKey>)> {
         let private_key = self.private_key.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Private key is required for authentication. Please set private_key in config.json"))?;
+            .ok_or_else(|| anyhow::anyhow!("Private key is required. Please set private_key in config.json"))?;
+        
         let signer = LocalSigner::from_str(private_key)
-            .context("Failed to create signer from private key. Ensure private_key is a valid hex string.")?
+            .context("Failed to create signer from private key")?
             .with_chain_id(Some(POLYGON));
         
         let mut auth_builder = ClobClient::new(&self.clob_url, ClobConfig::default())
@@ -107,36 +111,36 @@ impl PolymarketApi {
         
         if let Some(proxy_addr) = &self.proxy_wallet_address {
             let funder_address = AlloyAddress::parse_checksummed(proxy_addr, None)
-                .context(format!("Failed to parse proxy_wallet_address: {}. Ensure it's a valid Ethereum address.", proxy_addr))?;
+                .context(format!("Failed to parse proxy_wallet_address: {}", proxy_addr))?;
             
             auth_builder = auth_builder.funder(funder_address);
             
             let sig_type = match self.signature_type {
                 Some(1) => SignatureType::Proxy,
                 Some(2) => SignatureType::GnosisSafe,
-                Some(0) | None => {
-                    warn!("Proxy_wallet_address is set but signature_type is EOA. Defaulting to Proxy.");
-                    SignatureType::Proxy
-                },
-                Some(n) => anyhow::bail!("Invalid signature_type: {}. Must be 0 (EOA), 1 (Proxy), or 2 (GnosisSafe)", n),
+                _ => SignatureType::Proxy, // Default to Proxy when proxy wallet is set
             };
-            
             auth_builder = auth_builder.signature_type(sig_type);
-            eprintln!("Using proxy wallet: {} (signature type: {:?})", proxy_addr, sig_type);
         } else if let Some(sig_type_num) = self.signature_type {
-            // If signature type is set but no proxy wallet, validate it's EOA
             let sig_type = match sig_type_num {
                 0 => SignatureType::Eoa,
-                1 | 2 => anyhow::bail!("signature_type {} requires proxy_wallet_address to be set", sig_type_num),
-                n => anyhow::bail!("Invalid signature_type: {}. Must be 0 (EOA), 1 (Proxy), or 2 (GnosisSafe)", n),
+                1 | 2 => anyhow::bail!("signature_type {} requires proxy_wallet_address", sig_type_num),
+                n => anyhow::bail!("Invalid signature_type: {}", n),
             };
             auth_builder = auth_builder.signature_type(sig_type);
         }
         
-        let _client = auth_builder
+        let client = auth_builder
             .authenticate()
             .await
-            .context("Failed to authenticate with CLOB API. Check your API credentials (api_key, api_secret, api_passphrase) and private_key.")?;
+            .context("Failed to authenticate with CLOB API")?;
+        
+        Ok((client, signer))
+    }
+    
+    // Authenticate with Polymarket CLOB API
+    pub async fn authenticate(&self) -> Result<()> {
+        let _ = self.get_clob_client().await?;
         
         *self.authenticated.lock().await = true;
         
@@ -345,46 +349,7 @@ impl PolymarketApi {
 
     // Place an order
     pub async fn place_order(&self, order: &OrderRequest) -> Result<OrderResponse> {
-        let private_key = self.private_key.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Private key is required for order signing. Please set private_key in config.json"))?;
-        
-        let signer = LocalSigner::from_str(private_key)
-            .context("Failed to create signer from private key. Ensure private_key is a valid hex string.")?
-            .with_chain_id(Some(POLYGON));
-        
-        let mut auth_builder = ClobClient::new(&self.clob_url, ClobConfig::default())
-            .context("Failed to create CLOB client")?
-            .authentication_builder(&signer);
-        
-        if let Some(proxy_addr) = &self.proxy_wallet_address {
-            let funder_address = AlloyAddress::parse_checksummed(proxy_addr, None)
-                .context(format!("Failed to parse proxy_wallet_address: {}. Ensure it's a valid Ethereum address.", proxy_addr))?;
-            
-            auth_builder = auth_builder.funder(funder_address);
-            
-            let sig_type = match self.signature_type {
-                Some(1) => SignatureType::Proxy,
-                Some(2) => SignatureType::GnosisSafe,
-                Some(0) | None => SignatureType::Proxy, // Default to Proxy when proxy wallet is set
-                Some(n) => anyhow::bail!("Invalid signature_type: {}. Must be 0 (EOA), 1 (Proxy), or 2 (GnosisSafe)", n),
-            };
-            
-            auth_builder = auth_builder.signature_type(sig_type);
-        } else if let Some(sig_type_num) = self.signature_type {
-            // If signature type is set but no proxy wallet, validate it's EOA
-            let sig_type = match sig_type_num {
-                0 => SignatureType::Eoa,
-                1 | 2 => anyhow::bail!("signature_type {} requires proxy_wallet_address to be set", sig_type_num),
-                n => anyhow::bail!("Invalid signature_type: {}. Must be 0 (EOA), 1 (Proxy), or 2 (GnosisSafe)", n),
-            };
-            auth_builder = auth_builder.signature_type(sig_type);
-        }
-        
-        // Create CLOB client with authentication
-        let client = auth_builder
-            .authenticate()
-            .await
-            .context("Failed to authenticate with CLOB API. Check your API credentials.")?;
+        let (client, signer): (ClobClient<Authenticated<Normal>>, _) = self.get_clob_client().await?;
         
         let side = match order.side.as_str() {
             "BUY" => Side::Buy,
@@ -476,45 +441,7 @@ impl PolymarketApi {
         side: &str,
         order_type: Option<&str>, // "FOK" or "FAK", defaults to FOK
     ) -> Result<OrderResponse> {
-        let private_key = self.private_key.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Private key is required for order signing. Please set private_key in config.json"))?;
-        
-        let signer = LocalSigner::from_str(private_key)
-            .context("Failed to create signer from private key. Ensure private_key is a valid hex string.")?
-            .with_chain_id(Some(POLYGON));
-        
-        let mut auth_builder = ClobClient::new(&self.clob_url, ClobConfig::default())
-            .context("Failed to create CLOB client")?
-            .authentication_builder(&signer);
-        
-        if let Some(proxy_addr) = &self.proxy_wallet_address {
-            let funder_address = AlloyAddress::parse_checksummed(proxy_addr, None)
-                .context(format!("Failed to parse proxy_wallet_address: {}. Ensure it's a valid Ethereum address.", proxy_addr))?;
-            
-            auth_builder = auth_builder.funder(funder_address);
-            
-            let sig_type = match self.signature_type {
-                Some(1) => SignatureType::Proxy,
-                Some(2) => SignatureType::GnosisSafe,
-                Some(0) | None => SignatureType::Proxy, // Default to Proxy when proxy wallet is set
-                Some(n) => anyhow::bail!("Invalid signature_type: {}. Must be 0 (EOA), 1 (Proxy), or 2 (GnosisSafe)", n),
-            };
-            
-            auth_builder = auth_builder.signature_type(sig_type);
-        } else if let Some(sig_type_num) = self.signature_type {
-            // If signature type is set but no proxy wallet, validate it's EOA
-            let sig_type = match sig_type_num {
-                0 => SignatureType::Eoa,
-                1 | 2 => anyhow::bail!("signature_type {} requires proxy_wallet_address to be set", sig_type_num),
-                n => anyhow::bail!("Invalid signature_type: {}. Must be 0 (EOA), 1 (Proxy), or 2 (GnosisSafe)", n),
-            };
-            auth_builder = auth_builder.signature_type(sig_type);
-        }
-        
-        let client = auth_builder
-            .authenticate()
-            .await
-            .context("Failed to authenticate with CLOB API. Check your API credentials.")?;
+        let (client, signer): (ClobClient<Authenticated<Normal>>, _) = self.get_clob_client().await?;
         
         let side_enum = match side {
             "BUY" => Side::Buy,
@@ -554,17 +481,6 @@ impl PolymarketApi {
         let token_id_u256 = parse_token_id_to_u256(token_id)
             .context(format!("Failed to parse token_id as U256: {}", token_id))?;
 
-        let order_builder = client
-            .limit_order()
-            .token_id(token_id_u256)
-            .size(amount_decimal)
-            .price(market_price)
-            .side(side_enum);
-        
-        let signed_order = client.sign(&signer, order_builder.build().await?)
-            .await
-            .context("Failed to sign market order")?;
-        
         let final_price = if matches!(side_enum, Side::Sell) {
             let price_f64 = f64::try_from(market_price).unwrap_or(0.0);
             let adjusted_f64 = price_f64 * 0.995;
@@ -574,27 +490,22 @@ impl PolymarketApi {
                 .ok_or_else(|| anyhow::anyhow!("Failed to convert adjusted price to Decimal"))?
                 .round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
         } else {
-            // For BUY orders, also ensure 2 decimal places
+            // For BUY orders, ensure 2 decimal places and maybe 0.5% slippage (optional, but rounding is mandatory)
             market_price.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
         };
+
+        eprintln!("   📋 Final adjusted price: ${:.4} for {} order", final_price, side);
+
+        let order_builder = client
+            .limit_order()
+            .token_id(token_id_u256)
+            .size(amount_decimal)
+            .price(final_price)
+            .side(side_enum);
         
-        // If price was adjusted, rebuild the order
-        let signed_order = if matches!(side_enum, Side::Sell) && final_price != market_price {
-            let final_price_f64 = f64::try_from(final_price).unwrap_or(0.0);
-            let market_price_f64 = f64::try_from(market_price).unwrap_or(0.0);
-            eprintln!("   ⚠️  Adjusting SELL price from ${:.4} to ${:.4} for immediate execution", market_price_f64, final_price_f64);
-            let adjusted_builder = client
-                .limit_order()
-                .token_id(token_id_u256)
-                .size(amount_decimal)
-                .price(final_price)
-                .side(side_enum);
-            client.sign(&signer, adjusted_builder.build().await?)
-                .await
-                .context("Failed to sign adjusted market order")?
-        } else {
-            signed_order
-        };
+        let signed_order = client.sign(&signer, order_builder.build().await?)
+            .await
+            .context("Failed to sign market order")?;
         
         // Log detailed order info before posting
         let final_price_f64 = f64::try_from(final_price).unwrap_or(0.0);
@@ -667,43 +578,7 @@ impl PolymarketApi {
     
     /// Cancel an order by order ID
     pub async fn cancel_order(&self, order_id: &str) -> Result<()> {
-        let _private_key = self.private_key.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Private key is required for order cancellation. Please set private_key in config.json"))?;
-        
-        let signer = LocalSigner::from_str(_private_key)
-            .context("Failed to create signer from private key. Ensure private_key is a valid hex string.")?
-            .with_chain_id(Some(POLYGON));
-        
-        let mut auth_builder = ClobClient::new(&self.clob_url, ClobConfig::default())
-            .context("Failed to create CLOB client")?
-            .authentication_builder(&signer);
-        
-        if let Some(proxy_addr) = &self.proxy_wallet_address {
-            let funder_address = AlloyAddress::parse_checksummed(proxy_addr, None)
-                .context(format!("Failed to parse proxy_wallet_address: {}. Ensure it's a valid Ethereum address.", proxy_addr))?;
-            
-            auth_builder = auth_builder.funder(funder_address);
-            
-            let sig_type = match self.signature_type {
-                Some(1) => SignatureType::Proxy,
-                Some(2) => SignatureType::GnosisSafe,
-                Some(0) | None => SignatureType::Proxy,
-                Some(n) => anyhow::bail!("Invalid signature_type: {}. Must be 0 (EOA), 1 (Proxy), or 2 (GnosisSafe)", n),
-            };
-            auth_builder = auth_builder.signature_type(sig_type);
-        } else if let Some(sig_type_num) = self.signature_type {
-            let sig_type = match sig_type_num {
-                0 => SignatureType::Eoa,
-                1 | 2 => anyhow::bail!("signature_type {} requires proxy_wallet_address to be set", sig_type_num),
-                n => anyhow::bail!("Invalid signature_type: {}. Must be 0 (EOA), 1 (Proxy), or 2 (GnosisSafe)", n),
-            };
-            auth_builder = auth_builder.signature_type(sig_type);
-        }
-        
-        let client = auth_builder
-            .authenticate()
-            .await
-            .context("Failed to authenticate with CLOB API. Check your API credentials.")?;
+        let (client, _): (ClobClient<Authenticated<Normal>>, _) = self.get_clob_client().await?;
         
         client.cancel_order(order_id).await
             .context(format!("Failed to cancel order {}", order_id))?;
@@ -714,41 +589,7 @@ impl PolymarketApi {
     /// Check if both Up and Down orders are filled (production mode: verify via CLOB API).
     /// Returns Ok((up_filled, down_filled)). Order not found or API error is treated as not filled.
     pub async fn are_both_orders_filled(&self, up_order_id: &str, down_order_id: &str) -> Result<(bool, bool)> {
-        let _private_key = self.private_key.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Private key required to check order status"))?;
-
-        let signer = LocalSigner::from_str(_private_key)
-            .context("Failed to create signer from private key")?
-            .with_chain_id(Some(POLYGON));
-
-        let mut auth_builder = ClobClient::new(&self.clob_url, ClobConfig::default())
-            .context("Failed to create CLOB client")?
-            .authentication_builder(&signer);
-
-        if let Some(proxy_addr) = &self.proxy_wallet_address {
-            let funder_address = AlloyAddress::parse_checksummed(proxy_addr, None)
-                .context(format!("Failed to parse proxy_wallet_address: {}", proxy_addr))?;
-            auth_builder = auth_builder.funder(funder_address);
-            let sig_type = match self.signature_type {
-                Some(1) => SignatureType::Proxy,
-                Some(2) => SignatureType::GnosisSafe,
-                Some(0) | None => SignatureType::Proxy,
-                Some(n) => anyhow::bail!("Invalid signature_type: {}", n),
-            };
-            auth_builder = auth_builder.signature_type(sig_type);
-        } else if let Some(sig_type_num) = self.signature_type {
-            let sig_type = match sig_type_num {
-                0 => SignatureType::Eoa,
-                1 | 2 => anyhow::bail!("signature_type {} requires proxy_wallet_address", sig_type_num),
-                n => anyhow::bail!("Invalid signature_type: {}", n),
-            };
-            auth_builder = auth_builder.signature_type(sig_type);
-        }
-
-        let client = auth_builder
-            .authenticate()
-            .await
-            .context("Failed to authenticate with CLOB API")?;
+        let (client, _): (ClobClient<Authenticated<Normal>>, _) = self.get_clob_client().await?;
 
         let up_filled = client.order(up_order_id).await
             .ok()
@@ -851,7 +692,7 @@ impl PolymarketApi {
     pub async fn redeem_tokens(
         &self,
         condition_id: &str,
-        _token_id: &str,
+        token_id: &str,
         outcome: &str,
     ) -> Result<RedeemResponse> {
         let private_key = self.private_key.as_ref()

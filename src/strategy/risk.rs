@@ -17,17 +17,20 @@ pub struct RiskManager {
     oracle: Arc<BinanceOracle>,
     hedger: Arc<HyperliquidHedger>,
     bankroll: Arc<Mutex<f64>>,
+    start_id: String,
 }
 
 impl RiskManager {
     pub fn new(api: Arc<PolymarketApi>, config: Config, oracle: Arc<BinanceOracle>, hedger: Arc<HyperliquidHedger>) -> Self {
         let initial_bankroll = config.strategy.bankroll_usdc;
+        let start_id = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
         Self { 
             api, 
             config, 
             oracle, 
             hedger, 
-            bankroll: Arc::new(Mutex::new(initial_bankroll)) 
+            bankroll: Arc::new(Mutex::new(initial_bankroll)),
+            start_id
         }
     }
 
@@ -244,8 +247,9 @@ impl RiskManager {
 
         use std::fs::OpenOptions;
         use std::io::Write;
-        let file_exists = std::path::Path::new("trades_shadow_v5.csv").exists();
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("trades_shadow_v5.csv") {
+        let filename = format!("trades_{}.csv", self.start_id);
+        let file_exists = std::path::Path::new(&filename).exists();
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&filename) {
             if !file_exists {
                 let _ = writeln!(file, "timestamp,asset,action,shares,price,pnl");
             }

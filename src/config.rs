@@ -44,6 +44,8 @@ pub struct StrategyConfig {
     pub kelly_fraction_k: f64,
     #[serde(default = "default_bankroll_usdc")]
     pub bankroll_usdc: f64,
+    #[serde(default = "default_assets")]
+    pub assets: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -82,6 +84,9 @@ fn default_market_closure_check_interval_seconds() -> u64 { 120 }
 fn default_risk_aversion_gamma() -> f64 { 0.001 }
 fn default_kelly_fraction_k() -> f64 { 0.25 }
 fn default_bankroll_usdc() -> f64 { 500.0 }
+fn default_assets() -> Vec<String> { 
+    vec!["BTC".to_string(), "ETH".to_string(), "SOL".to_string(), "XRP".to_string()] 
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolymarketConfig {
@@ -121,6 +126,7 @@ impl Default for Config {
                 risk_aversion_gamma: 0.001,
                 kelly_fraction_k: 0.25,
                 bankroll_usdc: 500.0,
+                assets: vec!["BTC".to_string(), "ETH".to_string(), "SOL".to_string(), "XRP".to_string()],
             },
         }
     }

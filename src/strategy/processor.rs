@@ -129,8 +129,7 @@ impl MarketProcessor {
         }
 
         if let Some(mut s) = state {
-            let now = chrono::Utc::now().timestamp();
-            let seconds_elapsed = now % 900;
+            let seconds_elapsed = crate::strategy::get_current_time_et() % 900;
 
             // Rule 1: Sincronización Inicial y Límite de Entrada
             if seconds_elapsed > 720 && s.status == CycleStatus::AcceptingOrders && !s.up_matched && !s.down_matched {
@@ -207,7 +206,7 @@ impl MarketProcessor {
         );
 
         let current_time_et = crate::strategy::get_current_time_et();
-        let seconds_elapsed = chrono::Utc::now().timestamp() % 900;
+        let seconds_elapsed = current_time_et % 900;
         
         let sell_opposite = if up_price >= threshold {
             Some(("Up", "Down", &s.down_token_id, s.down_order_price))
@@ -224,7 +223,7 @@ impl MarketProcessor {
                     asset, winner, if winner == "Up" { up_price } else { down_price }, threshold, 
                     seconds_elapsed, loser);
                 s.status = CycleStatus::ClosingLoser;
-                s.winner_entry_price = Some(purchase_price); // Persist winner cost (purchase_price is the price of the winner leg here)
+                s.winner_entry_price = if winner == "Up" { Some(s.up_order_price) } else { Some(s.down_order_price) };
                 
                 let sell_price = self.api.get_price(token_to_sell, "SELL").await.ok()
                     .and_then(|p| p.to_string().parse::<f64>().ok()).unwrap_or(0.0);
@@ -347,7 +346,7 @@ impl MarketProcessor {
         }
         s.risk_sold = true;
         s.merged = true;
-        self.log_trade(asset, &format!("DANGER_SELL_{}", side_name), shares_to_sell, limit_price, -(purchase_price - limit_price) * shares_to_sell).await;
+        self.risk.log_trade(asset, &format!("DANGER_SELL_{}", side_name), shares_to_sell, limit_price, -(purchase_price - limit_price) * shares_to_sell).await;
         Ok(())
     }
 
@@ -551,16 +550,4 @@ impl MarketProcessor {
         }
     }
 
-    async fn log_trade(&self, asset: &str, action: &str, shares: f64, price: f64, pnl: f64) {
-        use std::fs::OpenOptions;
-        use std::io::Write;
-        let file_exists = std::path::Path::new("trades.csv").exists();
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("trades.csv") {
-            if !file_exists {
-                let _ = writeln!(file, "timestamp,asset,action,shares,price,pnl");
-            }
-            let ts = chrono::Utc::now().to_rfc3339();
-            let _ = writeln!(file, "{},{},{},{:.4},{:.4},{:.4}", ts, asset, action, shares, price, pnl);
-        }
-    }
 }

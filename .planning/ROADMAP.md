@@ -81,3 +81,18 @@
 - **Phase 8.4: Correlation Alpha (Binance BTC Trigger)**
   - Background WebSocket task for Binance BTC futures volatility tracking.
   - Independent lead-lag trigger for ALT markets based on BTC breakouts.
+
+## Milestone 9: Audit-Driven Stabilization & Logic Consolidation
+**Goal:** Resolve identified bugs and technical debt from the v5 audit.
+
+- **Phase 9.1: Critical Bug Fixing & Timezone Sync**
+  - Fix `side_enum` moves and `final_price` re-signing logic in `api.rs`.
+  - Unify `seconds_elapsed` source to ET across `processor.rs`.
+  - Fix `redeem_tokens` hardcoding and `winner_entry_price` logic.
+- **Phase 9.2: Technical Debt & Authentication Refactor**
+  - Consolidate duplicated `CLOB` authentication blocks.
+  - Implement dynamic asset list from configuration.
+  - Merge duplicated `log_trade` implementations.
+- **Phase 9.3: Flash Module & Hedge Implementation**
+  - Implement Milestone 5 Flash Module (EV Engine).
+  - Transition HyperliquidHedger from stub to functional.

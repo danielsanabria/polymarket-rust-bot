@@ -13,19 +13,41 @@ use hedger::HyperliquidHedger;
 use clap::Parser;
 use config::{Args, Config};
 use std::io::Write;
+use std::fs::OpenOptions;
 use std::sync::Arc;
 use api::PolymarketApi;
 use strategy::PreLimitStrategy;
-use log::warn;
+use log::{warn, info};
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let start_id = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let log_filename = format!("bot_{}.log", start_id);
+    let log_file = Arc::new(std::sync::Mutex::new(
+        OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_filename)?
+    ));
+
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Info)
-        .format(|buf, record| {
-            writeln!(buf, "{}", record.args())
+        .format(move |buf, record| {
+            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+            let line = format!("[{}] {} - {}", ts, record.level(), record.args());
+            
+            // To console
+            writeln!(buf, "{}", line)?;
+            
+            // To file
+            if let Ok(mut file) = log_file.lock() {
+                let _ = writeln!(file, "{}", line);
+            }
+            Ok(())
         })
         .init();
+
+    info!("Logging initialized. Unique log file: {}", log_filename);
 
     let args = Args::parse();
     let config = Config::load(&args.config)?;
@@ -88,7 +110,7 @@ async fn main() -> Result<()> {
     let market_closure_interval = config.strategy.market_closure_check_interval_seconds;
     
     // Initialize High-Speed Binance Oracle
-    let assets = vec!["BTC".to_string(), "ETH".to_string(), "SOL".to_string(), "XRP".to_string()];
+    let assets = config.strategy.assets.clone();
     let oracle = Arc::new(BinanceOracle::new(assets));
     let oracle_for_ws = Arc::clone(&oracle);
     
@@ -156,14 +178,23 @@ async fn run_redeem_only(
     let mut fail_count = 0u32;
     for cid in &cids {
         eprintln!("\n--- Redeeming condition {} ---", &cid[..cid.len().min(18)]);
+        // For manual redeem-only mode, we try both to be safe.
         match api.redeem_tokens(cid, "", "Up").await {
             Ok(_) => {
-                eprintln!("Success: {}", cid);
+                eprintln!("Success (Up): {}", cid);
                 ok_count += 1;
             }
-            Err(e) => {
-                eprintln!("Failed to redeem {}: {} (skipping)", cid, e);
-                fail_count += 1;
+            Err(_) => {
+                match api.redeem_tokens(cid, "", "Down").await {
+                    Ok(_) => {
+                        eprintln!("Success (Down): {}", cid);
+                        ok_count += 1;
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to redeem {}: {} (skipping)", cid, e);
+                        fail_count += 1;
+                    }
+                }
             }
         }
     }

@@ -28,6 +28,9 @@ To be the fastest and most robust market participant in Polymarket's 15m periodi
 - [ ] **Legging Risk Management:** 15s timeout for imbalanced positions.
 - [ ] **Redemption Auditing:** Persistence of `winner_entry_price` for accurate PnL tracking.
 - [ ] **Adaptive Kelly Sizing:** Dynamic capital-aware position sizing.
+- [ ] **Audit Resolution (Phase 9.1):** Critical fixes for `side_enum`, `final_price`, `redeem_tokens`, and ET/UTC synchronization.
+- [ ] **Tech Debt (Phase 9.2):** CLOB auth consolidation, dynamic asset list, and logger merge.
+- [ ] **Feature Completion (Phase 9.3):** Flash Module EV Engine and Hyperliquid integration.
 
 ### Out of Scope
 - [ ] Cross-platform arbitrage (other than hedging) — focus remains on Polymarket.
