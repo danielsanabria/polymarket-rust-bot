@@ -201,7 +201,23 @@ impl PreLimitStrategy {
                 }
             } else {
                 let current_period_et = get_current_15m_period_et();
-                info!("{} | Monitoring for next market session (starts: {})", asset, current_period_et);
+                let next_period_start = current_period_et + MARKET_DURATION_SECS;
+                let next_period_end = next_period_start + MARKET_DURATION_SECS;
+                let secs_elapsed = current_time_et - current_period_et;
+                let secs_until_next = next_period_start - current_time_et;
+                let order_window_secs = (self.config.strategy.place_order_before_mins * 60) as i64;
+                let secs_until_order_window = secs_until_next - order_window_secs;
+                
+                if secs_until_order_window > 0 {
+                    info!("{} | Idle | Period: {}m{}s elapsed | Order window in: {}m{}s",
+                        asset,
+                        secs_elapsed / 60, secs_elapsed % 60,
+                        secs_until_order_window / 60, secs_until_order_window % 60);
+                } else if secs_until_next > 0 {
+                    info!("{} | 🕒 IN ORDER WINDOW | {}s until next period starts", asset, secs_until_next);
+                } else {
+                    info!("{} | Waiting for next period ({}) | {}s ago", asset, next_period_start, -secs_until_next);
+                }
             }
         }
         

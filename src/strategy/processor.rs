@@ -53,10 +53,15 @@ impl MarketProcessor {
             let is_next_market_prepared = state.as_ref().map_or(false, |s| s.expiry == next_period_start + MARKET_DURATION_SECS);
             
             if !is_next_market_prepared && !needs_danger_handling {
-                let signal = self.risk.get_place_signal(asset, current_period_et).await;
-                if signal == crate::signals::MarketSignal::Good {
+                // Evaluate the NEXT market (not current) — current market near expiry
+                // is always polarized and would always return BAD signal.
+                // Unknown = next market not listed yet, try to discover it anyway.
+                // Bad = next market already has a clear winner (rare pre-market), skip.
+                let signal = self.risk.get_place_signal(asset, next_period_start).await;
+                let should_try = signal != crate::signals::MarketSignal::Bad;
+
+                if should_try {
                     if let Some(next_market) = self.discover_next_market(asset, next_period_start).await? {
-                        info!("PREPARING: {} market (starts in {}s)", asset, time_until_next);
                         let (up_token_id, down_token_id) = self.discovery.get_market_tokens(&next_market.condition_id).await?;
 
                         let up_shares_current = states_guard.values().filter(|s| s.asset == asset).map(|s| s.up_shares).sum::<f64>();
@@ -66,25 +71,31 @@ impl MarketProcessor {
                         let base_price = self.config.strategy.price_limit;
                         let up_price = self.round_price(base_price - delta);
                         let down_price = self.round_price(base_price + delta);
+                        let straddle_cost = up_price + down_price;
 
-                        // Rule 2: Filtro de Coste Máximo (Spread Cap)
-                        if up_price + down_price > 0.94 {
-                            info!("{} | PROPOSED STRADDLE TOO EXPENSIVE: ${:.2} + ${:.2} = ${:.2} (> 0.94). Skipping quote.", 
-                                asset, up_price, down_price, up_price + down_price);
+                        // Arbitrage guard: only enter if straddle cost < $1.00
+                        // Guaranteed payout is $1.00 → profit = $1.00 - straddle_cost
+                        if straddle_cost >= 1.00 {
+                            info!("{} | NO EDGE: straddle cost ${:.2} >= $1.00. Skipping.", asset, straddle_cost);
+                            return Ok(());
+                        }
+                        // Spread cap: require at least 3% edge (straddle cost <= 0.97)
+                        if straddle_cost > 0.97 {
+                            info!("{} | LOW EDGE: straddle ${:.2}+${:.2}=${:.2} > 0.97 cap. Skipping.",
+                                asset, up_price, down_price, straddle_cost);
                             return Ok(());
                         }
 
+                        let edge_pct = (1.00 - straddle_cost) * 100.0;
+                        info!("✅ ARBITRAGE PRE-ORDER: {} | Up:${:.2} + Down:${:.2} = ${:.2} | Edge: +{:.1}% | {}s until open",
+                            asset, up_price, down_price, straddle_cost, edge_pct, time_until_next);
+
                         // Calculate Kelly Size
-                        let p_up = 0.52; // Temporary bias for test
+                        let p_up = 0.52;
                         let p_down = 1.0 - p_up;
-                        
                         let up_size_shares = self.risk.calculate_kelly_size(p_up, up_price).await;
                         let down_size_shares = self.risk.calculate_kelly_size(p_down, down_price).await;
-                        
                         let shares_to_use = up_size_shares.max(down_size_shares).min(self.config.strategy.shares * 5.0).max(1.0);
-
-                        debug!("{} | Skewing limits: Up=${:.2}, Down=${:.2} (delta={:.3}, q={:.1}) | Kelly Size: {:.1} shares", 
-                            asset, up_price, down_price, delta, up_shares_current - down_shares_current, shares_to_use);
 
                         let up_order = self.place_limit_order(&up_token_id, "BUY", up_price, shares_to_use).await?;
                         let down_order = self.place_limit_order(&down_token_id, "BUY", down_price, shares_to_use).await?;
@@ -121,9 +132,15 @@ impl MarketProcessor {
                         };
                         states_guard.insert(asset.to_string(), new_state);
                         return Ok(());
+                    } else {
+                        info!("⏳ {} | Next market not listed yet ({}s until open) — will retry", asset, time_until_next);
                     }
-                } else if signal == crate::signals::MarketSignal::Bad {
-                    debug!("{} | Bad signal for current market — skipping pre-orders for next 15m", asset);
+                } else {
+                    // Signal BAD = next market already has a clear winner pre-market, no edge
+                    if let Some((up_p, down_p, _)) = self.risk.get_market_snapshot(asset, next_period_start).await {
+                        info!("⛔ {} | NEXT market BAD — Up:${:.2} Down:${:.2} already decided. Skipping.",
+                            asset, up_p, down_p);
+                    }
                 }
             }
         }
