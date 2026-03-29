@@ -46,6 +46,23 @@ pub struct StrategyConfig {
     pub bankroll_usdc: f64,
     #[serde(default = "default_assets")]
     pub assets: Vec<String>,
+    // Phase 10.2: Hard entry caps
+    #[serde(default = "default_straddle_hard_cap")]
+    pub straddle_hard_cap: f64,
+    #[serde(default = "default_straddle_hard_cap")]
+    pub straddle_second_leg_cap: f64,
+    // Phase 10.3: Loser stop-loss
+    #[serde(default = "default_loser_stop_loss_price")]
+    pub loser_stop_loss_price: f64,
+    // Phase 10.5: Per-asset fill probability estimates
+    #[serde(default = "default_fill_probability_btc")]
+    pub fill_probability_btc: f64,
+    #[serde(default = "default_fill_probability_eth")]
+    pub fill_probability_eth: f64,
+    #[serde(default = "default_fill_probability_sol")]
+    pub fill_probability_sol: f64,
+    #[serde(default = "default_fill_probability_xrp")]
+    pub fill_probability_xrp: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -66,20 +83,32 @@ pub struct SignalConfig {
     pub danger_time_passed: u64,
     #[serde(default = "default_one_side_buy_risk_management")]
     pub one_side_buy_risk_management: String,
-    #[serde(default = "default_true")]
+    // Phase 10.1: mid-market re-entry (disabled by default — too expensive mid-period)
+    #[serde(default)]
     pub mid_market_enabled: bool,
+    // Phase 10.1: BTC correlation directional trigger (disabled by default)
+    #[serde(default)]
+    pub btc_correlation_enabled: bool,
+    #[serde(default = "default_btc_correlation_threshold")]
+    pub btc_correlation_threshold: f64,
+    #[serde(default = "default_btc_correlation_min_straddle_cost")]
+    pub btc_correlation_min_straddle_cost: f64,
 }
 
 fn default_true() -> bool { true }
-fn default_stable_min() -> f64 { 0.35 }
-fn default_stable_max() -> f64 { 0.65 }
+fn default_stable_min() -> f64 { 0.20 }
+fn default_stable_max() -> f64 { 0.80 }
 fn default_clear_threshold() -> f64 { 0.99 }
 fn default_clear_remaining_mins() -> u64 { 15 }
-fn default_danger_price() -> f64 { 0.15 }
-fn default_danger_time_passed() -> u64 { 30 }
+// Phase 10.4: raised from 0.15 to 0.28 — react before full collapse
+fn default_danger_price() -> f64 { 0.28 }
+// Phase 10.4: lowered from 30 to 15 — one-side timeout faster
+fn default_danger_time_passed() -> u64 { 15 }
 fn default_one_side_buy_risk_management() -> String { "price".to_string() }
-fn default_sell_opposite_above() -> f64 { 0.95 }
-fn default_sell_opposite_time_remaining() -> u64 { 15 }
+// Phase 10.3: lowered from 0.95 to 0.70 — sell loser when winner has direction
+fn default_sell_opposite_above() -> f64 { 0.70 }
+// Phase 10.3: 10 minutes remaining (down from 15)
+fn default_sell_opposite_time_remaining() -> u64 { 10 }
 fn default_market_closure_check_interval_seconds() -> u64 { 120 }
 fn default_risk_aversion_gamma() -> f64 { 0.001 }
 fn default_kelly_fraction_k() -> f64 { 0.25 }
@@ -87,6 +116,18 @@ fn default_bankroll_usdc() -> f64 { 500.0 }
 fn default_assets() -> Vec<String> { 
     vec!["BTC".to_string(), "ETH".to_string(), "SOL".to_string(), "XRP".to_string()] 
 }
+// Phase 10.1: BTC correlation defaults
+fn default_btc_correlation_threshold() -> f64 { 0.003 }
+fn default_btc_correlation_min_straddle_cost() -> f64 { 0.94 }
+// Phase 10.2: straddle hard caps
+fn default_straddle_hard_cap() -> f64 { 0.94 }
+// Phase 10.3: loser leg stop-loss price
+fn default_loser_stop_loss_price() -> f64 { 0.25 }
+// Phase 10.5: per-asset fill probability estimates
+fn default_fill_probability_btc() -> f64 { 0.88 }
+fn default_fill_probability_eth() -> f64 { 0.85 }
+fn default_fill_probability_sol() -> f64 { 0.78 }
+fn default_fill_probability_xrp() -> f64 { 0.75 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PolymarketConfig {
@@ -120,13 +161,20 @@ impl Default for Config {
                 check_interval_ms: 2000,
                 simulation_mode: false,
                 signal: SignalConfig::default(),
-                sell_opposite_above: 0.95,
-                sell_opposite_time_remaining: 15,
+                sell_opposite_above: 0.70,
+                sell_opposite_time_remaining: 10,
                 market_closure_check_interval_seconds: 120,
                 risk_aversion_gamma: 0.001,
                 kelly_fraction_k: 0.25,
                 bankroll_usdc: 500.0,
                 assets: vec!["BTC".to_string(), "ETH".to_string(), "SOL".to_string(), "XRP".to_string()],
+                straddle_hard_cap: 0.94,
+                straddle_second_leg_cap: 0.94,
+                loser_stop_loss_price: 0.25,
+                fill_probability_btc: 0.88,
+                fill_probability_eth: 0.85,
+                fill_probability_sol: 0.78,
+                fill_probability_xrp: 0.75,
             },
         }
     }

@@ -73,13 +73,14 @@ impl MarketProcessor {
                         let down_price = self.round_price(base_price + delta);
                         let straddle_cost = up_price + down_price;
 
-                        // Arbitrage guard: only enter if straddle cost < $1.00
+                        // Phase 10.2: Arbitrage guard — hard cap from config (default 0.94)
                         // Guaranteed payout is $1.00 → profit = $1.00 - straddle_cost
-                        if straddle_cost >= 1.00 {
-                            info!("{} | NO EDGE: straddle cost ${:.2} >= $1.00. Skipping.", asset, straddle_cost);
+                        if straddle_cost >= self.config.strategy.straddle_hard_cap {
+                            info!("{} | NO EDGE: straddle cost ${:.2} >= {:.2} cap. Skipping.",
+                                asset, straddle_cost, self.config.strategy.straddle_hard_cap);
                             return Ok(());
                         }
-                        // Spread cap: require at least 3% edge (straddle cost <= 0.97)
+                        // Minimum edge floor: require at least 3% edge
                         if straddle_cost > 0.97 {
                             info!("{} | LOW EDGE: straddle ${:.2}+${:.2}=${:.2} > 0.97 cap. Skipping.",
                                 asset, up_price, down_price, straddle_cost);
@@ -90,11 +91,11 @@ impl MarketProcessor {
                         info!("✅ ARBITRAGE PRE-ORDER: {} | Up:${:.2} + Down:${:.2} = ${:.2} | Edge: +{:.1}% | {}s until open",
                             asset, up_price, down_price, straddle_cost, edge_pct, time_until_next);
 
-                        // Calculate Kelly Size
-                        let p_up = 0.52;
-                        let p_down = 1.0 - p_up;
-                        let up_size_shares = self.risk.calculate_kelly_size(p_up, up_price).await;
-                        let down_size_shares = self.risk.calculate_kelly_size(p_down, down_price).await;
+                        // Phase 10.5: Use asset-specific fill probability for Kelly sizing
+                        // p = probability BOTH legs fill before period opens
+                        let p_fill = self.risk.fill_probability_estimate(asset, time_until_next);
+                        let up_size_shares = self.risk.calculate_kelly_size(p_fill, up_price).await;
+                        let down_size_shares = self.risk.calculate_kelly_size(p_fill, down_price).await;
                         let shares_to_use = up_size_shares.max(down_size_shares).min(self.config.strategy.shares * 5.0).max(1.0);
 
                         let up_order = self.place_limit_order(&up_token_id, "BUY", up_price, shares_to_use).await?;
@@ -172,8 +173,13 @@ impl MarketProcessor {
                 s.status = CycleStatus::StraddleFormed;
             }
             
-            // Phase 3.2: Correlation Check (only for ALTs)
-            if asset != "BTC" && !s.up_matched && !s.down_matched && s.status == CycleStatus::AcceptingOrders {
+            // Phase 3.2: Correlation Check — only when explicitly enabled and only for ALTs
+            // Phase 10.1: Disabled by default (btc_correlation_enabled = false)
+            // Rationale: directional single-leg buys bypass straddle cost cap and generate
+            // the highest individual losses observed in simulation data.
+            if asset != "BTC" && !s.up_matched && !s.down_matched
+                && s.status == CycleStatus::AcceptingOrders
+                && self.config.strategy.signal.btc_correlation_enabled {
                 self.check_btc_correlation_trigger(asset, &mut s).await?;
             }
 
@@ -236,10 +242,22 @@ impl MarketProcessor {
         };
 
         if let Some((winner, loser, token_to_sell, purchase_price)) = sell_opposite {
-            // Rule 5: Vender pierna perdedora cuando quedan <= sell_opposite_time_remaining mins
-            // Bug B fix: guard with != ClosingLoser to avoid double-execution on consecutive ticks
-            if time_remaining_mins <= self.config.strategy.sell_opposite_time_remaining as i64 
-                && s.status != CycleStatus::ClosingLoser {
+            // Phase 10.3: Price-based loser stop-loss — runs every tick, independent of time.
+            // If loser leg falls below stop_loss price even without time trigger, sell immediately.
+            let loser_current_price = if winner == "Up" { down_price } else { up_price };
+            let stop_loss_triggered = loser_current_price <= self.config.strategy.loser_stop_loss_price
+                && s.status != CycleStatus::ClosingLoser;
+
+            // Time-based trigger: sell when winner >= threshold AND time is short
+            let time_triggered = time_remaining_mins <= self.config.strategy.sell_opposite_time_remaining as i64
+                && s.status != CycleStatus::ClosingLoser;
+
+            if stop_loss_triggered {
+                info!("{}: Loser STOP-LOSS triggered — {} leg at ${:.3} <= ${:.2} floor. Selling immediately.",
+                    asset, loser, loser_current_price, self.config.strategy.loser_stop_loss_price);
+            }
+
+            if stop_loss_triggered || time_triggered {
                 info!("{}: Both filled, {} price ${:.2} >= {:.2} AND {}m remaining (trigger: {}m) — selling {} to reduce loss", 
                     asset, winner, if winner == "Up" { up_price } else { down_price }, threshold, 
                     time_remaining_mins, self.config.strategy.sell_opposite_time_remaining, loser);
@@ -334,12 +352,31 @@ impl MarketProcessor {
 
         warn!("{}: Danger/15s Timeout triggered — only {} token matched. Selling and canceling other order", asset, side_name);
         
-        // Rule 3: Protección contra Danger Sell a precio cero (Límite max(bid * 0.8, 0.05))
+        // Phase 10.4: Precision emergency execution
+        // Pre-flight: if market bid < $0.05, selling would return ~$0.00 after fees.
+        // Just cancel the order and absorb the full loss — saves an API call.
         let bid = self.api.get_price(token_to_sell, "SELL").await.ok()
             .and_then(|p| p.to_string().parse::<f64>().ok()).unwrap_or(0.0);
+        let shares_to_sell = if side_name == "Up" { s.up_order_shares } else { s.down_order_shares };
+
+        if bid < 0.05 {
+            warn!("{}: Danger bid ${:.3} below minimum — skipping sell, canceling order to avoid fee waste.",
+                asset, bid);
+            if !self.config.strategy.simulation_mode {
+                if let Some(id) = other_order_id {
+                    let _ = self.api.cancel_order(id).await;
+                }
+            }
+            s.risk_sold = true;
+            s.merged = true;
+            let full_loss = purchase_price * shares_to_sell;
+            let mut total = total_profit.lock().await;
+            *total -= full_loss;
+            self.risk.log_trade(asset, &format!("DANGER_ABANDONED_{}", side_name), shares_to_sell, 0.0, -full_loss).await;
+            return Ok(());
+        }
         
         let limit_price = if bid > 0.0 { (bid * 0.80).max(0.05) } else { 0.05 };
-        let shares_to_sell = if side_name == "Up" { s.up_order_shares } else { s.down_order_shares };
 
         if self.config.strategy.simulation_mode {
             let loss = (purchase_price - limit_price) * shares_to_sell;
@@ -436,15 +473,24 @@ impl MarketProcessor {
         if self.risk.get_place_signal(asset, current_period_et).await == crate::signals::MarketSignal::Good {
             if let Some(current_market) = self.discover_next_market(asset, current_period_et).await? {
                 if let Some((up_price, down_price, _)) = self.risk.get_market_snapshot(asset, current_period_et).await {
+                    // Phase 10.1: Skip mid-market if prices have moved more than 15% from neutral
+                    // (e.g. Up > $0.65 means market has directionally resolved)
+                    if up_price > 0.65 || down_price > 0.65 {
+                        debug!("{} | MID-ENTRY SKIPPED: Market directionally biased (Up:{:.2} Down:{:.2})",
+                            asset, up_price, down_price);
+                        return Ok(());
+                    }
+
                     let (up_order_price, down_order_price) = if up_price <= down_price {
                         (self.round_price(up_price), self.round_price(0.98 - up_price))
                     } else {
                         (self.round_price(0.98 - down_price), self.round_price(down_price))
                     };
 
-                    // Rule 2: Filtro de Coste Máximo (Spread Cap) en Mid-market entry
-                    if up_order_price + down_order_price > 0.94 {
-                        debug!("{} | MID-ENTRY TOO EXPENSIVE: ${:.2} + ${:.2} = ${:.2} (> 0.94). Skipping.", 
+                    // Phase 10.1: Stricter $0.90 cap for mid-market entries
+                    // Mid-period prices already have direction baked in — need bigger edge buffer
+                    if up_order_price + down_order_price > 0.90 {
+                        debug!("{} | MID-ENTRY SKIPPED: Straddle cost ${:.2}+${:.2}=${:.2} > $0.90 strict cap.", 
                             asset, up_order_price, down_order_price, up_order_price + down_order_price);
                         return Ok(());
                     }

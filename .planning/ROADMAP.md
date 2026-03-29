@@ -96,3 +96,18 @@
 - **Phase 9.3: Flash Module & Hedge Implementation**
   - Implement Milestone 5 Flash Module (EV Engine).
   - Transition HyperliquidHedger from stub to functional.
+
+## Milestone 10: Strategy Stabilization & Edge Restoration
+**Goal:** Restore positive edge through strict arbitrage caps and adaptive loss cutting.
+
+- **Phase 10.1: Hard Entry Guards & Mid-Market Restriction**
+  - Enforce $0.94 straddle cap in `processor.rs`.
+  - Disable or strictly cap mid-market entries.
+- **Phase 10.2: Adaptive Loss Management (Loser Sell Logic)**
+  - Sell loser leg when winner hits $0.70 ($sell\_opposite\_above$).
+  - Implement price-based stop loss ($0.25) for loser leg.
+- **Phase 10.3: Early Danger Exit & Precision Execution**
+  - Raise `danger_price` to $0.25 and use limit orders with $0.05 floor.
+- **Phase 10.4: Strategic De-risking (BTC & Kelly)**
+  - Disable non-neutral directional buys from BTC correlation.
+  - Recalculate Kelly inputs for fill-probability neutral straddles.

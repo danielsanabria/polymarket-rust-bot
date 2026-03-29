@@ -126,7 +126,8 @@ impl RiskManager {
         if let Some(binance_price) = self.oracle.get_price(&state.asset).await {
             if let Some(price_at_placement) = state.binance_price_at_placement {
                 let delta_pct = (binance_price - price_at_placement) / price_at_placement;
-                let threshold = 0.005; 
+                // Phase 10.4: Tighten from 0.005 to 0.003 — react faster to Binance divergence
+                let threshold = 0.003; 
 
                 if !state.up_matched && delta_pct < -threshold {
                     if let Some(order_id) = &state.up_order_id {
@@ -178,8 +179,33 @@ impl RiskManager {
         delta
     }
 
+    /// Phase 10.5: Calculate fill probability estimate per asset.
+    /// This estimates the probability that BOTH legs of the straddle will fill
+    /// before the market period ends, based on historical fill rates.
+    pub fn fill_probability_estimate(&self, asset: &str, time_until_period_secs: i64) -> f64 {
+        let base_p = match asset {
+            "BTC" => self.config.strategy.fill_probability_btc,
+            "ETH" => self.config.strategy.fill_probability_eth,
+            "SOL" => self.config.strategy.fill_probability_sol,
+            "XRP" => self.config.strategy.fill_probability_xrp,
+            _ => 0.75,
+        };
+        // Decay fill probability as time shrinks below 60s
+        // (less time = lower probability of both legs filling at limit price)
+        if time_until_period_secs < 60 {
+            let decay = (time_until_period_secs as f64 / 60.0).max(0.1);
+            return (base_p * decay).max(0.20);
+        }
+        base_p
+    }
+
+    /// Phase 10.5: Kelly sizing for straddle arbitrage.
+    /// Formula: b = (1.00 - straddle_cost) / straddle_cost (net odds on guaranteed $1 payout)
+    ///          p = fill_probability (both legs fill before period ends)
+    ///          f* = (p*(b+1) - 1) / b
     pub async fn calculate_kelly_size(&self, p: f64, c: f64) -> f64 {
         if c <= 0.0 || c >= 1.0 { return 0.0; }
+        // For a straddle, net odds b = (payout - cost) / cost = (1.00 - c) / c
         let b = (1.0 - c) / c;
         let f_star = (p * (b + 1.0) - 1.0) / b;
         
@@ -191,7 +217,7 @@ impl RiskManager {
         let bankroll = *self.bankroll.lock().await;
         let order_size_usdc = bankroll * f_final;
         
-        debug!("🎯 Kelly Check: p={:.2}, c={:.2}, b={:.2} | f*={:.4}, f_final={:.4} | Bankroll: ${:.2} | Order: ${:.2}", 
+        debug!("🎯 Kelly [Straddle]: p={:.2}, c={:.2}, b={:.2} | f*={:.4}, f_final={:.4} | Bankroll: ${:.2} | Order: ${:.2}", 
             p, c, b, f_star, f_final, bankroll, order_size_usdc);
             
         order_size_usdc / c
