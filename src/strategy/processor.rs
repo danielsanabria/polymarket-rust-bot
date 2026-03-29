@@ -48,8 +48,8 @@ impl MarketProcessor {
             ((s.up_matched && !s.down_matched) || (s.down_matched && !s.up_matched))
         });
 
-        let seconds_elapsed = current_time_et % 900;
-        if time_until_next <= (self.config.strategy.place_order_before_mins * 60) as i64 && seconds_elapsed <= 720 {
+        let seconds_elapsed = current_time_et - current_period_et; // Bug 1 fix: use direct diff
+        if time_until_next <= (self.config.strategy.place_order_before_mins * 60) as i64 && seconds_elapsed >= 60 {
             let is_next_market_prepared = state.as_ref().map_or(false, |s| s.expiry == next_period_start + MARKET_DURATION_SECS);
             
             if !is_next_market_prepared && !needs_danger_handling {
@@ -129,7 +129,7 @@ impl MarketProcessor {
         }
 
         if let Some(mut s) = state {
-            let seconds_elapsed = crate::strategy::get_current_time_et() % 900;
+            let seconds_elapsed = current_time_et - current_period_et; // Bug 1 fix: direct diff
 
             // Rule 1: Sincronización Inicial y Límite de Entrada
             if seconds_elapsed > 720 && s.status == CycleStatus::AcceptingOrders && !s.up_matched && !s.down_matched {
@@ -139,9 +139,10 @@ impl MarketProcessor {
                 if let Some(id) = &s.down_order_id { let _ = self.api.cancel_order(id).await; }
             }
 
-            // Timeout estricto para straddle (180s)
-            if seconds_elapsed > 180 && s.status == CycleStatus::AcceptingOrders && (!s.up_matched || !s.down_matched) {
-                warn!("{} | Straddle not formed within 180s. Canceling and transitioning to WaitingForNextCycle.", asset);
+            // Bug 2 fix: Timeout medido desde que se colocaron las órdenes, no desde inicio del período
+            let secs_since_placement = current_time_et - s.order_placed_at;
+            if secs_since_placement > 180 && s.status == CycleStatus::AcceptingOrders && (!s.up_matched || !s.down_matched) {
+                warn!("{} | Straddle not formed within 180s of placement. Canceling and transitioning to WaitingForNextCycle.", asset);
                 s.status = CycleStatus::WaitingForNextCycle;
                 if let Some(id) = &s.up_order_id { let _ = self.api.cancel_order(id).await; }
                 if let Some(id) = &s.down_order_id { let _ = self.api.cancel_order(id).await; }
@@ -206,7 +207,8 @@ impl MarketProcessor {
         );
 
         let current_time_et = crate::strategy::get_current_time_et();
-        let seconds_elapsed = current_time_et % 900;
+        // Bug 4 fix: use time_remaining-based trigger instead of hardcoded 720-780s window
+        let time_remaining_mins = (s.expiry - current_time_et) / 60;
         
         let sell_opposite = if up_price >= threshold {
             Some(("Up", "Down", &s.down_token_id, s.down_order_price))
@@ -217,11 +219,13 @@ impl MarketProcessor {
         };
 
         if let Some((winner, loser, token_to_sell, purchase_price)) = sell_opposite {
-            // Rule 5: Optimización del cierre de la pierna perdedora (Min 12-13)
-            if seconds_elapsed >= 720 && seconds_elapsed <= 780 {
-                info!("{}: Both filled, {} price ${:.2} >= {:.2} AND seconds_elapsed {} (Min 12-13) — selling {} to reduce loss", 
+            // Rule 5: Vender pierna perdedora cuando quedan <= sell_opposite_time_remaining mins
+            // Bug B fix: guard with != ClosingLoser to avoid double-execution on consecutive ticks
+            if time_remaining_mins <= self.config.strategy.sell_opposite_time_remaining as i64 
+                && s.status != CycleStatus::ClosingLoser {
+                info!("{}: Both filled, {} price ${:.2} >= {:.2} AND {}m remaining (trigger: {}m) — selling {} to reduce loss", 
                     asset, winner, if winner == "Up" { up_price } else { down_price }, threshold, 
-                    seconds_elapsed, loser);
+                    time_remaining_mins, self.config.strategy.sell_opposite_time_remaining, loser);
                 s.status = CycleStatus::ClosingLoser;
                 s.winner_entry_price = if winner == "Up" { Some(s.up_order_price) } else { Some(s.down_order_price) };
                 
@@ -281,15 +285,10 @@ impl MarketProcessor {
             self.risk.is_danger_signal(price)
         } else if mode.contains("time") {
             let danger_mins = self.config.strategy.signal.danger_time_passed as i64;
-            let timeout_hit = s.one_side_matched_at.map_or(false, |t| current_time_et - t >= danger_mins * 60);
-            
-            // Rule 4: Timeout estricto para el Legging Risk (15 segundos)
-            let leg_timeout_hit = s.one_side_matched_at.map_or(false, |t| current_time_et - t >= 15);
-            
-            timeout_hit || leg_timeout_hit
+            s.one_side_matched_at.map_or(false, |t| current_time_et - t >= danger_mins * 60)
         } else {
-            // Rule 4: Timeout estricto para el Legging Risk (15 segundos) - always active for time safety
-            s.one_side_matched_at.map_or(false, |t| current_time_et - t >= 15)
+            // Bug 3 fix: "none" or unknown mode = do not trigger early sell
+            false
         };
 
         if !self.config.strategy.simulation_mode && should_sell_early {

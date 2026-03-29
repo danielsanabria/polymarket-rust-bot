@@ -78,9 +78,13 @@ impl MarketDiscovery {
     }
 
     /// Current 15-minute period start (ET), rounded down to :00, :15, :30, :45.
+    /// Uses the ET timestamp (same epoch reference as get_current_time_et()) so
+    /// period boundaries are always consistent with time elapsed comparisons.
     pub fn current_15m_period_start_et() -> i64 {
-        let now = chrono::Utc::now().timestamp();
-        (now / 900) * 900
+        let now_et = chrono::Utc::now()
+            .with_timezone(&New_York)
+            .timestamp();
+        (now_et / 900) * 900
     }
 
     pub async fn get_market_tokens(&self, condition_id: &str) -> Result<(String, String)> {

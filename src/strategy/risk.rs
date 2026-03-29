@@ -39,7 +39,7 @@ impl RiskManager {
         
         if current_time_et < state.market_period_start {
             debug!("Market {} for {} hasn't started yet (current: {}, start: {})", 
-                state.market_period_start, state.asset, current_time_et, state.market_period_start);
+                state.condition_id, state.asset, current_time_et, state.market_period_start);
             return Ok(());
         }
 
