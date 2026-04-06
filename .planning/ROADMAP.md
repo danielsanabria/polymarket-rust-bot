@@ -108,6 +108,16 @@
   - Implement price-based stop loss ($0.25) for loser leg.
 - **Phase 10.3: Early Danger Exit & Precision Execution**
   - Raise `danger_price` to $0.25 and use limit orders with $0.05 floor.
-- **Phase 10.4: Strategic De-risking (BTC & Kelly)**
+- [ ] **Strategic De-risking (BTC & Kelly):**
   - Disable non-neutral directional buys from BTC correlation.
   - Recalculate Kelly inputs for fill-probability neutral straddles.
+
+## Recurring: Knowledge Lifecycle & Quality Control
+**Goal:** Maintain the memory and mathematical integrity of the bot across all future versions.
+
+- **Post-Milestone Retrospective (PMR):**
+  - Update `.planning/lessons.md` after every milestone completion or major strategy pivot.
+  - Analyze performance data from `trades.csv` and bot logs to identify new anti-patterns.
+- **Guardrail Audit:**
+  - Verify every new strategy against the "Project Guardrails" in `PROJECT.md` before starting implementation.
+  - Audit price feed integrity (Gamma vs CLOB) during the Research phase of every new arbitrage module.

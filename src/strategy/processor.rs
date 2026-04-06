@@ -274,6 +274,7 @@ impl MarketProcessor {
                     *total -= loss;
                     info!("SIMULATION: Would sell {} {} shares at ${:.4} (purchased at ${:.2}). Loss: ${:.2}", 
                         shares_to_sell, loser, sell_price, purchase_price, loss);
+                    self.risk.log_trade(asset, &format!("CLOSE_{}", winner), shares_to_sell, sell_price, -loss).await;
                 } else {
                     if let Err(e) = self.api.place_market_order(token_to_sell, shares_to_sell, "SELL", None).await {
                         error!("Failed to sell {} token for {}: {}", loser, asset, e);

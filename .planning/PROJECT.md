@@ -36,6 +36,15 @@ To be the fastest and most robust market participant in Polymarket's 15m periodi
 - [ ] Cross-platform arbitrage (other than hedging) — focus remains on Polymarket.
 - [ ] Long-term prediction markets — focus is strictly on the 15m periodic cycles.
 
+## Project Guardrails (Hard Constraints)
+
+To avoid historical failures documented in [lessons.md](file:///c:/Users/danie/Documents/rust-bot/polymarket-arbitrage-bot-pre-order-15m-markets/.planning/lessons.md), all future modifications MUST adhere to these guards:
+
+- **Structural Edge Only:** No new directional strategies unless derived from mathematical optimization (e.g., Bregman).
+- **Oracle Integrity:** Never use mismatched price feeds for paper trading/simulation (CLOB vs Gamma mismatch killed v5 Momentum).
+- **Execution Unification:** Use high-speed Binance WebSocket oracles as the ground truth before executing any Polymarket order.
+- **Continuous Learning:** The `lessons.md` file MUST be updated after every live trading session and hito completion.
+
 ## Tech Stack
 - **Language:** Rust (Tokio async)
 - **APIs:** Polymarket CLOB & Gamma, Binance/Coinbase WS, Hyperliquid/dYdX REST/WS
@@ -50,4 +59,4 @@ To be the fastest and most robust market participant in Polymarket's 15m periodi
 | High-Speed WS Oracles | Polymarket prices lag; external exchanges define the "true" price. | Pending |
 
 ---
-*Last updated: 2026-03-27 during v5 hardening initialization*
+*Last updated: 2026-03-29 following strategy retrospective integration*

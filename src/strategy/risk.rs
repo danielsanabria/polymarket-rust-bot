@@ -277,10 +277,11 @@ impl RiskManager {
         let file_exists = std::path::Path::new(&filename).exists();
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&filename) {
             if !file_exists {
-                let _ = writeln!(file, "timestamp,asset,action,shares,price,pnl");
+                let _ = writeln!(file, "timestamp,asset,action,shares,price,cost,pnl");
             }
             let ts = chrono::Utc::now().to_rfc3339();
-            let _ = writeln!(file, "{},{},{},{:.4},{:.4},{:.4}", ts, asset, action, shares, price, pnl);
+            let cost = shares * price;
+            let _ = writeln!(file, "{},{},{},{:.4},{:.4},{:.4},{:.4}", ts, asset, action, shares, price, cost, pnl);
         }
     }
 }
