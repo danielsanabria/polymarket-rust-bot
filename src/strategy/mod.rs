@@ -10,6 +10,7 @@ use crate::strategy::processor::MarketProcessor;
 use crate::strategy::risk::RiskManager;
 use crate::oracle::BinanceOracle;
 use crate::hedger::HyperliquidHedger;
+use crate::ai::{SharedAiState, SharedAiContext};
 use anyhow::Result;
 use chrono::Utc;
 use chrono_tz::America::New_York;
@@ -31,11 +32,13 @@ pub struct PreLimitStrategy {
     trades: Arc<Mutex<HashMap<String, CycleTrade>>>,
     closure_checked: Arc<Mutex<HashMap<String, bool>>>,
     period_profit: Arc<Mutex<f64>>,
+    ai_state: SharedAiState,
+    ai_context: SharedAiContext,
 }
 
 impl PreLimitStrategy {
-    pub fn new(api: Arc<PolymarketApi>, config: Config, oracle: Arc<BinanceOracle>, hedger: Arc<HyperliquidHedger>) -> Self {
-        let processor = MarketProcessor::new(api.clone(), config.clone(), oracle.clone(), hedger.clone());
+    pub fn new(api: Arc<PolymarketApi>, config: Config, oracle: Arc<BinanceOracle>, hedger: Arc<HyperliquidHedger>, ai_state: SharedAiState, ai_context: SharedAiContext) -> Self {
+        let processor = MarketProcessor::new(api.clone(), config.clone(), oracle.clone(), hedger.clone(), ai_state.clone(), ai_context.clone());
         Self {
             api,
             config,
@@ -48,6 +51,8 @@ impl PreLimitStrategy {
             trades: Arc::new(Mutex::new(HashMap::new())),
             closure_checked: Arc::new(Mutex::new(HashMap::new())),
             period_profit: Arc::new(Mutex::new(0.0)),
+            ai_state,
+            ai_context,
         }
     }
 

@@ -6,6 +6,7 @@ use crate::strategy::state::*;
 use crate::strategy::risk::RiskManager;
 use crate::oracle::BinanceOracle;
 use crate::hedger::HyperliquidHedger;
+use crate::ai::{SharedAiState, SharedAiContext, AiAction, AiContext};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,13 +20,15 @@ pub struct MarketProcessor {
     hedger: Arc<HyperliquidHedger>,
     discovery: MarketDiscovery,
     risk: RiskManager,
+    ai_state: SharedAiState,
+    ai_context: SharedAiContext,
 }
 
 impl MarketProcessor {
-    pub fn new(api: Arc<PolymarketApi>, config: Config, oracle: Arc<BinanceOracle>, hedger: Arc<HyperliquidHedger>) -> Self {
+    pub fn new(api: Arc<PolymarketApi>, config: Config, oracle: Arc<BinanceOracle>, hedger: Arc<HyperliquidHedger>, ai_state: SharedAiState, ai_context: SharedAiContext) -> Self {
         let discovery = MarketDiscovery::new(api.clone());
         let risk = RiskManager::new(api.clone(), config.clone(), oracle.clone(), hedger.clone());
-        Self { api, config, oracle, hedger, discovery, risk }
+        Self { api, config, oracle, hedger, discovery, risk, ai_state, ai_context }
     }
 
     pub async fn process_asset(
@@ -72,6 +75,38 @@ impl MarketProcessor {
                         let up_price = self.round_price(base_price - delta);
                         let down_price = self.round_price(base_price + delta);
                         let straddle_cost = up_price + down_price;
+                        
+                        let btc_vol = self.oracle.get_btc_volatility(1000).await.unwrap_or(0.0);
+
+                        // Update AI Context
+                        {
+                            let mut ctx_guard = self.ai_context.write().await;
+                            *ctx_guard = Some(AiContext {
+                                asset: asset.to_string(),
+                                straddle_cost,
+                                time_remaining_secs: time_until_next,
+                                btc_volatility: btc_vol,
+                            });
+                        }
+
+                        // Read AI Decision
+                        let ai_decision = {
+                            let ai_guard = self.ai_state.read().await;
+                            ai_guard.clone()
+                        };
+
+                        if ai_decision.action == AiAction::HALT {
+                            warn!("{} | AI ORACLE: HALT order received. Skipping entry.", asset);
+                            return Ok(());
+                        }
+
+                        if ai_decision.action == AiAction::WAIT {
+                            info!("{} | AI ORACLE: WAIT signal. We should be conservative. (Confidence: {}%)", asset, ai_decision.confidence);
+                            // We can skip or proceed depending on how strict we want to be. The user said: "oracle of parameters" and "emergency switch". 
+                            // So if WAIT, maybe we just log it and proceed if mathematical edge is good, or we skip.
+                            // Let's skip to be safe if confidence is high, or just log. The user said: "A robust fallback will be implemented to ignore hallucinations and revert to a conservative WAIT state if serde_json parsing fails." 
+                            // If it falls back to WAIT, we probably shouldn't block the trade if mathematical edge is good.
+                        }
 
                         // Phase 10.2: Arbitrage guard — hard cap from config (default 0.94)
                         // Guaranteed payout is $1.00 → profit = $1.00 - straddle_cost

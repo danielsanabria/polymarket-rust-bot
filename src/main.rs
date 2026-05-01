@@ -6,6 +6,7 @@ mod signals;
 mod strategy;
 mod oracle;
 mod hedger;
+mod ai;
 
 use anyhow::Result;
 use oracle::BinanceOracle;
@@ -18,6 +19,7 @@ use std::sync::Arc;
 use api::PolymarketApi;
 use strategy::PreLimitStrategy;
 use log::{warn, info};
+use ai::AiEngine;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -125,7 +127,13 @@ async fn main() -> Result<()> {
         "".to_string(),
     ));
 
-    let strategy = Arc::new(PreLimitStrategy::new(api, config, oracle, hedger));
+    // Initialize AI Engine
+    let ai_engine = AiEngine::new();
+    ai_engine.start_background_task();
+    let ai_state = ai_engine.state.clone();
+    let ai_context = ai_engine.context.clone();
+
+    let strategy = Arc::new(PreLimitStrategy::new(api, config, oracle, hedger, ai_state, ai_context));
     let strategy_for_closure = Arc::clone(&strategy);
 
     tokio::spawn(async move {

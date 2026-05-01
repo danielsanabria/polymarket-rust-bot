@@ -121,3 +121,13 @@
 - **Guardrail Audit:**
   - Verify every new strategy against the "Project Guardrails" in `PROJECT.md` before starting implementation.
   - Audit price feed integrity (Gamma vs CLOB) during the Research phase of every new arbitrage module.
+
+### Phase 1: Integrar IA local (Ollama + Gemma 2B) para estrategia en tiempo real
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 0
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 1 to break down)
